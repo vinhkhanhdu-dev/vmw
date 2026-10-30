@@ -6,8 +6,19 @@
 // Nếu file này bị chạy bằng Node thường (vd. Render/host tự chạy `node <package.json main>`)
 // thì không có Electron → khởi động web server (server.ts) thay vì crash.
 if (!process.versions.electron) {
-  const { spawn } = require('node:child_process');
-  const root = require('node:path').join(__dirname, '..');
+  const { spawn, spawnSync } = require('node:child_process');
+  const nodePath = require('node:path');
+  const root = nodePath.join(__dirname, '..');
+  // Host không chạy `npm run build` (Build Command chỉ có `npm install`) → tự build giao diện
+  if (!require('node:fs').existsSync(nodePath.join(root, 'dist', 'index.html'))) {
+    console.log('[main.cjs] Chưa có dist/ → đang build giao diện (vite build)...');
+    const viteBin = nodePath.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
+    const build = spawnSync(process.execPath, [viteBin, 'build'], { cwd: root, stdio: 'inherit' });
+    if (build.status !== 0) {
+      console.error('[main.cjs] vite build thất bại.');
+      process.exit(build.status || 1);
+    }
+  }
   console.log('[main.cjs] Không chạy trong Electron → khởi động web server: node --import tsx server.ts');
   const child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], { cwd: root, stdio: 'inherit' });
   child.on('exit', (code) => process.exit(code ?? 0));
