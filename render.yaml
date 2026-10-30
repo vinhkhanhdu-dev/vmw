@@ -1,0 +1,22 @@
+# Render Blueprint — web service (Express + Vite build).
+# package.json "main" points at the Electron entry; Render must NOT run that.
+# Start command below runs the real web server (server.ts).
+services:
+  - type: web
+    name: my-vinh-wedding
+    runtime: node
+    plan: free
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/status
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: ELECTRON_SKIP_BINARY_DOWNLOAD # don't download the Electron binary on the server
+        value: "1"
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: APP_PIN
+        sync: false
