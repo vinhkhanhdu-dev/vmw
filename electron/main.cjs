@@ -2,6 +2,19 @@
 // Chạy thử:   npm run electron:start      (build rồi mở app)
 // Dev:        npm run dev  +  npm run electron:dev   (nạp http://localhost:3000)
 // Đóng gói:   npm run electron:build      (ra file cài đặt trong release/)
+
+// Nếu file này bị chạy bằng Node thường (vd. Render/host tự chạy `node <package.json main>`)
+// thì không có Electron → khởi động web server (server.ts) thay vì crash.
+if (!process.versions.electron) {
+  const { spawn } = require('node:child_process');
+  const root = require('node:path').join(__dirname, '..');
+  console.log('[main.cjs] Không chạy trong Electron → khởi động web server: node --import tsx server.ts');
+  const child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], { cwd: root, stdio: 'inherit' });
+  child.on('exit', (code) => process.exit(code ?? 0));
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));
+  return;
+}
+
 const { app, BrowserWindow, protocol, net, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
