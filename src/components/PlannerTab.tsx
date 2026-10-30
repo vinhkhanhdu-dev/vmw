@@ -673,17 +673,21 @@ const PREP_GROUPS: { key: PrepGroupKey; label: string; tone: string }[] = [
 const PrepView: React.FC<{
   weddingInfo: WeddingInfo;
   prepItems: PrepItem[];
+  expenses: Expense[];
   onEdit: (p: PrepItem | null) => void;
   onToggle: (p: PrepItem) => void;
   onQuickAdd: (title: string, dueDate?: string) => void;
   onAddSuggestions: (s: PrepSuggestion[]) => void;
-}> = ({ weddingInfo, prepItems, onEdit, onToggle, onQuickAdd, onAddSuggestions }) => {
+}> = ({ weddingInfo, prepItems, expenses, onEdit, onToggle, onQuickAdd, onAddSuggestions }) => {
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDue, setNewDue] = useState('');
 
-  const suggestions = useMemo(() => getPrepSuggestions(prepItems, weddingInfo), [prepItems, weddingInfo]);
+  const suggestions = useMemo(
+    () => getPrepSuggestions(prepItems, weddingInfo, { expenses }),
+    [prepItems, weddingInfo, expenses]
+  );
   const visibleSuggestions = showAllSuggestions ? suggestions : suggestions.slice(0, 4);
   const done = prepItems.filter((p) => p.done);
   const pct = prepItems.length ? Math.round((done.length / prepItems.length) * 100) : 0;
@@ -800,7 +804,7 @@ const PrepView: React.FC<{
 
       {/* Quick add */}
       <form
-        className="card p-3 flex items-center gap-2"
+        className="card p-3 flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (!newTitle.trim()) return;
@@ -810,13 +814,13 @@ const PrepView: React.FC<{
         }}
       >
         <input
-          className="field field-sm flex-1 min-w-0"
+          className="field field-sm basis-full"
           placeholder="Ghi thêm việc / món cần chuẩn bị..."
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
         />
         <input
-          className="field field-sm w-34 shrink-0"
+          className="field field-sm flex-1 min-w-0"
           type="date"
           aria-label="Hạn chót"
           value={newDue}
@@ -886,9 +890,9 @@ export const PlannerTab: React.FC<PlannerTabProps> = ({
   const pendingCount = prepItems.filter((p) => !p.done).length;
 
   return (
-    <div className="flex flex-col h-full bg-[#FAF7F2] overflow-hidden">
+    <div className="flex flex-col h-full bg-cream text-stone-800 overflow-hidden">
       <TabHeader
-        title="Kế Hoạch Cưới"
+        title="Kế hoạch cưới"
         subtitle={
           days !== null && days >= 0
             ? `Còn ${days} ngày · ${weddingInfo.weddingDate}`
@@ -921,7 +925,7 @@ export const PlannerTab: React.FC<PlannerTabProps> = ({
         </div>
       </TabHeader>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain p-3.5 pb-8">
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 pb-8">
         {view === 'finance' ? (
           <FinanceView
             guests={guests}
@@ -934,6 +938,7 @@ export const PlannerTab: React.FC<PlannerTabProps> = ({
           <PrepView
             weddingInfo={weddingInfo}
             prepItems={prepItems}
+            expenses={expenses}
             onEdit={(item) => setPrepModal({ open: true, item })}
             onToggle={(p) => onSavePrepItem({ ...p, done: !p.done, updatedAt: new Date().toISOString() })}
             onQuickAdd={(title, dueDate) => {

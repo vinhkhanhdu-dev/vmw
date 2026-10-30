@@ -78,7 +78,7 @@ export function processPlannerMessage(
     };
   }
 
-  const suggestions = getPrepSuggestions(prepItems, info, { limit: 5 });
+  const suggestions = getPrepSuggestions(prepItems, info, { limit: 5, expenses });
   return {
     replyText: buildPrepReply(suggestions, prepItems, info),
     actionType: 'prep_suggestion',

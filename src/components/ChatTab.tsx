@@ -418,7 +418,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
       </div>
 
       {/* Quick prompts */}
-      <div className="shrink-0 px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none bg-cream border-t border-stone-200/50">
+      <div className="shrink-0 px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none snap-row bg-cream border-t border-stone-200/50">
         {QUICK_PROMPTS.map((p) => (
           <button key={p.text} onClick={() => handleQuickReply(p.text)} className="chip chip-off text-[11px] hover:border-wine-300 hover:text-wine-700">
             {p.label}

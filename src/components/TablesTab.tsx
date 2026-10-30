@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Guest, WeddingInfo } from '../types';
-import { TabHeader, Modal, IconTile } from './ui';
+import { TabHeader, Modal, IconTile, CountUp } from './ui';
 
 interface TablesTabProps {
   guests: Guest[];
@@ -34,18 +34,20 @@ const Kpi: React.FC<{
   icon: React.ReactNode;
   tile: string;
   label: string;
-  value: React.ReactNode;
+  value: number;
+  prefix?: string;
   unit: string;
   caption: string;
   valueClass?: string;
-}> = ({ icon, tile, label, value, unit, caption, valueClass = 'text-stone-900' }) => (
-  <div className="card p-3.5">
+}> = ({ icon, tile, label, value, prefix, unit, caption, valueClass = 'text-stone-900' }) => (
+  <div className="card card-hover p-3.5">
     <div className="flex items-center justify-between">
       <span className="text-[11px] font-semibold text-stone-500">{label}</span>
       <IconTile className={`w-8 h-8 rounded-lg ${tile}`}>{icon}</IconTile>
     </div>
     <div className={`mt-2 text-[26px] leading-none font-bold tracking-tight tabular-nums ${valueClass}`}>
-      {value} <span className="text-xs font-medium text-stone-400">{unit}</span>
+      {prefix}
+      <CountUp value={value} /> <span className="text-xs font-medium text-stone-400">{unit}</span>
     </div>
     <div className="text-[11px] text-stone-500 mt-1.5">{caption}</div>
   </div>
@@ -215,7 +217,7 @@ export const TablesTab: React.FC<TablesTabProps> = ({ guests, weddingInfo, onUpd
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 overscroll-contain pb-8">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 overscroll-contain scroll-area pb-8">
         {/* Wedding hero */}
         <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-wine-700 via-wine-800 to-stone-900 text-white p-5 shadow-wine">
           <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gold-400/20 blur-2xl pointer-events-none" />
@@ -254,7 +256,8 @@ export const TablesTab: React.FC<TablesTabProps> = ({ guests, weddingInfo, onUpd
             icon={<UtensilsCrossed className="w-4 h-4" />}
             tile="bg-gold-50 text-gold-600"
             label="Ước tính bàn"
-            value={`~${totalTables}`}
+            value={totalTables}
+            prefix="~"
             unit="bàn"
             caption={`Chuẩn ${capacity} người/mâm`}
           />
@@ -342,7 +345,7 @@ export const TablesTab: React.FC<TablesTabProps> = ({ guests, weddingInfo, onUpd
 
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-[10px] text-stone-400 font-semibold uppercase tracking-wider">Tổng</span>
-                  <span className="font-serif text-3xl text-stone-900 leading-none mt-0.5">{totalHeadcount}</span>
+                  <CountUp value={totalHeadcount} className="font-serif text-3xl text-stone-900 leading-none mt-0.5" />
                   <span className="text-[10px] text-stone-500 mt-0.5">người</span>
                 </div>
               </div>

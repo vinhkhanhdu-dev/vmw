@@ -156,7 +156,8 @@ export async function saveWeddingInfo(info: WeddingInfo): Promise<WeddingInfo> {
 export async function getChatMessages(): Promise<ChatMessage[]> {
   if (isConnected && db) {
     try {
-      const docs = await db.collection('chat_messages').find({}).sort({ timestamp: 1 }).toArray();
+      // Thứ tự lưu ($natural): trường timestamp chỉ là chuỗi HH:MM nên không sắp xếp đúng được
+      const docs = await db.collection('chat_messages').find({}).sort({ $natural: 1 }).toArray();
       if (docs.length > 0) {
         return docs.map((doc) => {
           const { _id, ...rest } = doc;

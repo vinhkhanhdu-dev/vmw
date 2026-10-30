@@ -212,6 +212,32 @@ function templateMatchesItem(t: PrepTemplate, item: PrepItem): boolean {
   return (t.aliases || []).some((a) => title.includes(a));
 }
 
+/** Việc "đặt dịch vụ" coi như đã làm khi sổ chi tiêu đã có khoản chi cùng hạng mục. */
+const COVERED_BY_EXPENSE_CATEGORY: Record<string, ExpenseCategory> = {
+  nha_hang: 'tiec',
+  anh_cuoi: 'anh_cuoi',
+  nhan_cuoi: 'nhan_cuoi',
+  trang_phuc: 'trang_phuc',
+  mc_nhac: 'am_nhac',
+  trang_diem: 'trang_diem',
+  thiep: 'thiep',
+  xe_cuoi: 'xe_cuoi',
+  le_vat: 'le_vat',
+  trang_tri: 'trang_tri',
+};
+
+function isTemplateCovered(t: PrepTemplate, prepItems: PrepItem[], expenses: Expense[], info: WeddingInfo, hasDate: boolean): boolean {
+  if (prepItems.some((item) => templateMatchesItem(t, item))) return true;
+  if (t.key === 'xem_ngay' && hasDate) return true;
+  if (t.key === 'ngan_sach' && (info.totalBudget || 0) > 0) return true;
+  const cat = COVERED_BY_EXPENSE_CATEGORY[t.key];
+  if (cat && expenses.some((e) => e.category === cat)) return true;
+  return expenses.some((e) => {
+    const title = removeVietnameseAccents(e.title) + ' ';
+    return (t.aliases || []).some((a) => title.includes(a));
+  });
+}
+
 const URGENCY_RANK: Record<PrepSuggestion['urgency'], number> = { overdue: 0, now: 1, soon: 2, later: 3 };
 
 /**
@@ -221,14 +247,15 @@ const URGENCY_RANK: Record<PrepSuggestion['urgency'], number> = { overdue: 0, no
 export function getPrepSuggestions(
   prepItems: PrepItem[],
   weddingInfo: WeddingInfo,
-  options: { now?: Date; limit?: number } = {}
+  options: { now?: Date; limit?: number; expenses?: Expense[] } = {}
 ): PrepSuggestion[] {
   const now = options.now || new Date();
   const today = startOfDay(now);
   const wedding = parseWeddingDate(weddingInfo.weddingDate);
   if (wedding && daysBetween(now, wedding) < 0) return [];
 
-  const suggestions = PREP_TEMPLATES.filter((t) => !prepItems.some((item) => templateMatchesItem(t, item))).map(
+  const expenses = options.expenses || [];
+  const suggestions = PREP_TEMPLATES.filter((t) => !isTemplateCovered(t, prepItems, expenses, weddingInfo, !!wedding)).map(
     (t): PrepSuggestion => {
       const base = { templateKey: t.key, title: t.title, category: t.category, tip: t.tip, estimatedCost: t.estimatedCost };
       if (!wedding) return { ...base, urgency: 'later' };
@@ -457,7 +484,7 @@ export function buildPrepReply(
   if (suggestions.length) {
     lines.push('', '💡 Mỹ Vinh gợi ý nên chuẩn bị thêm:');
     for (const s of suggestions) {
-      const flag = s.urgency === 'overdue' ? ' ⚠️ đã trễ' : s.urgency === 'now' ? ' (tuần này)' : '';
+      const flag = s.urgency === 'overdue' ? ' ⚠️ nên làm ngay' : s.urgency === 'now' ? ' (tuần này)' : '';
       lines.push(`• ${s.title}${flag}`);
     }
     lines.push('', 'Bấm vào từng mục bên dưới để thêm vào checklist nhé!');
@@ -476,7 +503,7 @@ export function buildDailyReminder(
 ): { text: string; suggestions: PrepSuggestion[] } | null {
   const urgent = getUrgentPrepItems(prepItems, now);
   const payments = getUpcomingPayments(expenses, now);
-  const suggestions = getPrepSuggestions(prepItems, weddingInfo, { now, limit: 3 }).filter(
+  const suggestions = getPrepSuggestions(prepItems, weddingInfo, { now, limit: 3, expenses }).filter(
     (s) => s.urgency === 'overdue' || s.urgency === 'now'
   );
   if (!urgent.length && !payments.length && !suggestions.length) return null;

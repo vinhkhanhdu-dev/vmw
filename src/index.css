@@ -193,3 +193,11 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(194, 146, 58, 0.6);
 }
+
+/* Chiều cao vùng hệ thống phía trên app:
+   - APK Android edge-to-edge: thanh trạng thái (env() hoặc biến Capacitor --safe-area-inset-top)
+   - Electron: thanh tiêu đề tùy biến (--app-titlebar, đặt trong electron/preload.cjs)
+   - Web: 0 */
+:root {
+  --app-safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--app-titlebar, 0px));
+}

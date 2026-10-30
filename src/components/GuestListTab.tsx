@@ -177,7 +177,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({
         </div>
 
         {/* Filters */}
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-none -mx-4 px-4">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-none snap-row -mx-4 px-4">
           <button
             onClick={() => {
               setSelectedSide('all');
@@ -222,7 +222,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({
       </TabHeader>
 
       {/* Guest list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain pb-8">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain scroll-area pb-8">
         {filteredGuests.length === 0 ? (
           <div className="card text-center py-14 px-6 animate-fade-up">
             <div className="w-14 h-14 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-3">
@@ -236,8 +236,12 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({
             </p>
           </div>
         ) : (
-          filteredGuests.map((guest) => (
-            <article key={guest.id} className="card p-3.5 transition-shadow hover:shadow-soft animate-fade-up">
+          filteredGuests.map((guest, index) => (
+            <article
+              key={guest.id}
+              className="card card-hover p-3.5 hover:shadow-soft animate-fade-up"
+              style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
+            >
               <div className="flex items-start gap-3">
                 <Avatar name={guest.name} side={guest.side} />
 

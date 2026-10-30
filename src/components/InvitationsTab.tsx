@@ -72,7 +72,7 @@ export const InvitationsTab: React.FC<InvitationsTabProps> = ({ guests, weddingI
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 overscroll-contain pb-8">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 overscroll-contain scroll-area pb-8">
         {/* Recipient */}
         <div className="card p-3.5 space-y-2">
           <label className="label mb-0 flex items-center gap-1.5">

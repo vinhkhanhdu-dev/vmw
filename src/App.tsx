@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2 } from 'lucide-react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
+import './motion.css';
 import { PhoneContainer } from './components/PhoneContainer';
 import { ChatTab } from './components/ChatTab';
 import { GuestListTab } from './components/GuestListTab';
@@ -14,6 +16,7 @@ import { initialGuests, initialWeddingInfo, initialChatMessages } from './data/i
 import { findDuplicateCandidates, extractGuestInfoFromText } from './utils/vietnameseNlp';
 import { API_BASE } from './utils/api';
 import { processPlannerMessage } from './utils/plannerBot';
+import { clearPinSession, isPinSessionValid, touchPinSession } from './utils/pinSession';
 import {
   buildDailyReminder,
   getUpcomingPayments,
@@ -52,13 +55,35 @@ const REMINDER_KEY = 'myvinh_last_reminder_date';
 
 export default function App() {
   // PIN lock authentication state
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('myvinh_unlocked') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // Nhớ PIN 1 giờ kể từ lần dùng gần nhất (xem utils/pinSession)
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => isPinSessionValid());
+
+  useEffect(() => {
+    if (!isUnlocked) return;
+    touchPinSession();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        touchPinSession(); // hạn 1 giờ tính từ lúc rời app
+      } else if (isPinSessionValid()) {
+        touchPinSession();
+      } else {
+        clearPinSession();
+        setIsUnlocked(false); // mở lại sau hơn 1 giờ chạy nền
+      }
+    };
+    const onPageHide = () => touchPinSession();
+    // Đang dùng app thì liên tục gia hạn, không bị khóa giữa chừng
+    const keepAlive = window.setInterval(() => {
+      if (document.visibilityState === 'visible') touchPinSession();
+    }, 60_000);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      window.clearInterval(keepAlive);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [isUnlocked]);
 
   // State loaded initially from cache, then synced from MongoDB
   const [guests, setGuests] = useState<Guest[]>(() => {
@@ -202,7 +227,7 @@ export default function App() {
   };
 
   const handleLockApp = () => {
-    sessionStorage.removeItem('myvinh_unlocked');
+    clearPinSession();
     setIsUnlocked(false);
     showToast('Đã khóa ứng dụng.');
   };
@@ -617,10 +642,19 @@ export default function App() {
 
   // If not unlocked, render PIN lock screen
   if (!isUnlocked) {
-    return <PinLockScreen onUnlockSuccess={() => setIsUnlocked(true)} weddingInfo={weddingInfo} />;
+    return (
+      <PinLockScreen
+        onUnlockSuccess={() => {
+          touchPinSession();
+          setIsUnlocked(true);
+        }}
+        weddingInfo={weddingInfo}
+      />
+    );
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <PhoneContainer
       activeTab={activeTab}
       onTabChange={setActiveTab}
@@ -628,6 +662,14 @@ export default function App() {
       duplicateCount={totalDuplicateAlerts}
       plannerAlertCount={plannerAlertCount}
     >
+      {/* Active tab slides/fades in when switching */}
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, ease: [0.2, 0.8, 0.2, 1] }}
+        className="h-full flex flex-col"
+      >
       {/* Tab 1: Conversational Chatbot */}
       {activeTab === 'chat' && (
         <ChatTab
@@ -699,16 +741,20 @@ export default function App() {
           onUpdateBudget={handleUpdateBudget}
         />
       )}
+      </motion.div>
 
       {/* Invitation Modal */}
-      {selectedGuestForInvitation && (
-        <InvitationModal
-          guest={selectedGuestForInvitation}
-          weddingInfo={weddingInfo}
-          allGuests={guests}
-          onClose={() => setSelectedGuestForInvitation(null)}
-        />
-      )}
+      <AnimatePresence>
+        {selectedGuestForInvitation && (
+          <InvitationModal
+            key="invitation-modal"
+            guest={selectedGuestForInvitation}
+            weddingInfo={weddingInfo}
+            allGuests={guests}
+            onClose={() => setSelectedGuestForInvitation(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Edit / Add Guest Modal */}
       <EditGuestModal
@@ -722,14 +768,24 @@ export default function App() {
       />
 
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 max-w-[88%] animate-fade-up">
-          <div className="flex items-center gap-2 bg-stone-900/95 backdrop-blur-md text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lift">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{toastMessage}</span>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            key="toast"
+            initial={{ opacity: 0, y: 14, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 520, damping: 34 }}
+            className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-[88%]"
+          >
+            <div className="flex items-center gap-2 bg-stone-900/95 backdrop-blur-md text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lift">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{toastMessage}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PhoneContainer>
+    </MotionConfig>
   );
 }

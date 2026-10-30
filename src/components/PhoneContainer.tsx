@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Users, Mail, UtensilsCrossed, Wallet } from 'lucide-react';
+import { Sparkles, Users, Mail, UtensilsCrossed, Wallet } from 'lucide-react';
 import { motion } from 'motion/react';
 import { TabId } from '../types';
 
@@ -12,10 +12,11 @@ interface PhoneContainerProps {
   plannerAlertCount?: number; // Việc chuẩn bị / khoản chi đến hạn
 }
 
+// The assistant sits in the middle as a raised action button; the other tabs flank it.
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'chat', label: 'Trợ lý', icon: MessageSquare },
   { id: 'guests', label: 'Khách mời', icon: Users },
   { id: 'invitations', label: 'Thiệp mời', icon: Mail },
+  { id: 'chat', label: 'Trợ lý', icon: Sparkles },
   { id: 'tables', label: 'Bàn tiệc', icon: UtensilsCrossed },
   { id: 'planner', label: 'Kế hoạch', icon: Wallet },
 ];
@@ -37,6 +38,8 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({
       </div>
 
       <div className="relative w-full max-w-md h-dvh md:h-[92vh] md:max-h-[900px] flex flex-col bg-cream overflow-hidden md:rounded-[32px] md:shadow-lift md:ring-1 md:ring-stone-900/5">
+        {/* Vùng thanh trạng thái (APK) / thanh tiêu đề (Electron): cùng màu trắng với header, cao 0 trên web */}
+        <div aria-hidden="true" className="shrink-0 bg-white" style={{ height: 'var(--app-safe-top)' }} />
         <main className="flex-1 overflow-hidden relative flex flex-col">{children}</main>
 
         <nav
@@ -46,6 +49,37 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({
           <div className="grid grid-cols-5 px-1 pt-1.5 pb-1.5">
             {TABS.map(({ id, label, icon: Icon }) => {
               const active = activeTab === id;
+
+              if (id === 'chat') {
+                return (
+                  <button
+                    key={id}
+                    onClick={() => onTabChange(id)}
+                    className="relative flex flex-col items-center justify-end min-h-[52px] group"
+                    aria-current={active ? 'page' : undefined}
+                    aria-label="Trợ lý Mỹ Vinh"
+                  >
+                    <span className="absolute -top-8 w-16 h-16 rounded-full p-1 bg-white shadow-lift">
+                      <span
+                        className={`relative w-full h-full rounded-full flex items-center justify-center text-white bg-linear-to-br from-wine-600 via-wine-700 to-gold-600 transition-all duration-200 ${
+                          active ? 'ring-4 ring-wine-200 scale-105' : 'group-hover:scale-105 group-active:scale-95'
+                        }`}
+                      >
+                        <Icon className="w-6 h-6" strokeWidth={2.25} />
+                        <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white" />
+                      </span>
+                    </span>
+                    <span
+                      className={`text-[10.5px] font-bold transition-colors ${
+                        active ? 'text-wine-700' : 'text-wine-700/80 group-hover:text-wine-700'
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  </button>
+                );
+              }
+
               return (
                 <button
                   key={id}
@@ -67,9 +101,6 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({
                       }`}
                       strokeWidth={active ? 2.25 : 2}
                     />
-                    {id === 'chat' && (
-                      <span className="absolute top-0 right-2.5 w-1.5 h-1.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-                    )}
                     {id === 'guests' && guestCount > 0 && (
                       <span className="absolute -top-1 right-0.5 min-w-4 h-4 px-1 rounded-full bg-wine-700 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
                         {guestCount}

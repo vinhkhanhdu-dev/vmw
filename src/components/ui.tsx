@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { motion, AnimatePresence, animate, useDragControls, useReducedMotion } from 'motion/react';
 import { GuestSide, InvitationStatus, RelationshipCategory } from '../types';
 
 // ---------- Labels & metadata shared across tabs ----------
@@ -138,8 +139,25 @@ interface ModalProps {
   size?: 'md' | 'lg';
 }
 
-/** Bottom sheet on mobile, centered dialog on larger screens. */
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return mobile;
+}
+
+/**
+ * Bottom sheet on mobile (spring in, drag the header down to dismiss),
+ * centered dialog on larger screens. Animates out as well as in.
+ */
 export const Modal: React.FC<ModalProps> = ({ open, onClose, title, subtitle, icon, children, footer, size = 'md' }) => {
+  const isMobile = useIsMobile();
+  const dragControls = useDragControls();
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -149,34 +167,95 @@ export const Modal: React.FC<ModalProps> = ({ open, onClose, title, subtitle, ic
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  const sheetMotion = isMobile
+    ? { initial: { y: '100%' }, animate: { y: 0 }, exit: { y: '100%' } }
+    : { initial: { opacity: 0, scale: 0.96, y: 8 }, animate: { opacity: 1, scale: 1, y: 0 }, exit: { opacity: 0, scale: 0.97, y: 6 } };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-stone-900/55 backdrop-blur-[2px] animate-fade-in" onClick={onClose} />
-      <div
-        className={`relative w-full ${size === 'lg' ? 'md:max-w-lg' : 'md:max-w-md'} max-h-[92dvh] md:max-h-[85vh] bg-white rounded-t-3xl md:rounded-3xl shadow-lift flex flex-col overflow-hidden animate-sheet-up md:animate-pop`}
-      >
-        <div className="md:hidden pt-2.5 flex justify-center">
-          <span className="w-10 h-1 rounded-full bg-stone-200" />
-        </div>
-        <div className="px-5 pt-3 pb-3.5 md:pt-5 flex items-start justify-between gap-3 border-b border-stone-100">
-          <div className="flex items-center gap-3 min-w-0">
-            {icon}
-            <div className="min-w-0">
-              <h2 className="font-serif text-lg leading-tight text-stone-900">{title}</h2>
-              {subtitle && <div className="text-xs text-stone-500 mt-0.5">{subtitle}</div>}
+    <AnimatePresence>
+      {open && (
+        <div
+          key="modal"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <motion.div
+            className="absolute inset-0 bg-stone-900/55 backdrop-blur-[2px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+          />
+          <motion.div
+            className={`relative w-full ${size === 'lg' ? 'md:max-w-lg' : 'md:max-w-md'} max-h-[92dvh] md:max-h-[85vh] bg-white rounded-t-3xl md:rounded-3xl shadow-lift flex flex-col overflow-hidden`}
+            {...sheetMotion}
+            transition={{ type: 'spring', stiffness: 420, damping: 38, mass: 0.9 }}
+            drag={isMobile ? 'y' : false}
+            dragListener={false}
+            dragControls={dragControls}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            dragSnapToOrigin
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 110 || info.velocity.y > 500) onClose();
+            }}
+          >
+            {/* Grab area: handle + header start the drag on mobile */}
+            <div
+              className="md:cursor-default touch-none"
+              onPointerDown={(e) => {
+                if (isMobile) dragControls.start(e);
+              }}
+            >
+              <div className="md:hidden pt-2.5 flex justify-center">
+                <span className="w-10 h-1 rounded-full bg-stone-200" />
+              </div>
+              <div className="px-5 pt-3 pb-3.5 md:pt-5 flex items-start justify-between gap-3 border-b border-stone-100">
+                <div className="flex items-center gap-3 min-w-0">
+                  {icon}
+                  <div className="min-w-0">
+                    <h2 className="font-serif text-lg leading-tight text-stone-900">{title}</h2>
+                    {subtitle && <div className="text-xs text-stone-500 mt-0.5">{subtitle}</div>}
+                  </div>
+                </div>
+                <button onClick={onClose} className="btn btn-ghost btn-icon -mr-2 -mt-1" aria-label="Đóng">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-          </div>
-          <button onClick={onClose} className="btn btn-ghost btn-icon -mr-2 -mt-1" aria-label="Đóng">
-            <X className="w-5 h-5" />
-          </button>
+            <div className="flex-1 overflow-y-auto overscroll-contain scroll-area">{children}</div>
+            {footer && <div className="px-5 py-3.5 border-t border-stone-100 bg-stone-50/70 pb-safe">{footer}</div>}
+          </motion.div>
         </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain">{children}</div>
-        {footer && <div className="px-5 py-3.5 border-t border-stone-100 bg-stone-50/70 pb-safe">{footer}</div>}
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
+};
+
+/** Animates a number from its previous value (0 on mount) to the new one. */
+export const CountUp: React.FC<{ value: number; className?: string }> = ({ value, className }) => {
+  const reduce = useReducedMotion();
+  const prev = useRef(0);
+  const [display, setDisplay] = useState(reduce ? value : 0);
+
+  useEffect(() => {
+    const from = prev.current;
+    prev.current = value;
+    if (reduce || from === value) {
+      setDisplay(value);
+      return;
+    }
+    const controls = animate(from, value, {
+      duration: 0.7,
+      ease: [0.2, 0.8, 0.2, 1],
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    });
+    return () => controls.stop();
+  }, [value, reduce]);
+
+  return <span className={className}>{display}</span>;
 };
 
 export const IconTile: React.FC<{ className?: string; children: React.ReactNode }> = ({ className = '', children }) => (
