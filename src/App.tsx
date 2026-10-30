@@ -55,7 +55,7 @@ const REMINDER_KEY = 'myvinh_last_reminder_date';
 
 export default function App() {
   // PIN lock authentication state
-  // Nhớ PIN 1 giờ kể từ lần dùng gần nhất (xem utils/pinSession)
+  // Chỉ nhớ PIN trong lần chạy hiện tại: tắt app mở lại phải nhập PIN (xem utils/pinSession)
   const [isUnlocked, setIsUnlocked] = useState<boolean>(() => isPinSessionValid());
 
   useEffect(() => {
