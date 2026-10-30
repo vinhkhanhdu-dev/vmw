@@ -14,6 +14,18 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
+// Allow the Android app (served from https://localhost) to call the API
+app.use('/api', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 import { handleApiRequest } from './src/server/apiRouter';
 
 app.all('/api/*', async (req, res) => {

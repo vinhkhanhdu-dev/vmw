@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import { PhoneContainer } from './components/PhoneContainer';
 import { ChatTab } from './components/ChatTab';
 import { GuestListTab } from './components/GuestListTab';
@@ -7,9 +8,47 @@ import { TablesTab } from './components/TablesTab';
 import { InvitationModal } from './components/InvitationModal';
 import { EditGuestModal } from './components/EditGuestModal';
 import { PinLockScreen } from './components/PinLockScreen';
-import { Guest, ChatMessage, WeddingInfo, InvitationStatus } from './types';
+import { PlannerTab, PlannerView } from './components/PlannerTab';
+import { Guest, ChatMessage, WeddingInfo, InvitationStatus, TabId, Expense, PrepItem, PrepSuggestion } from './types';
 import { initialGuests, initialWeddingInfo, initialChatMessages } from './data/initialData';
 import { findDuplicateCandidates, extractGuestInfoFromText } from './utils/vietnameseNlp';
+import { API_BASE } from './utils/api';
+import { processPlannerMessage } from './utils/plannerBot';
+import {
+  buildDailyReminder,
+  getUpcomingPayments,
+  getUrgentPrepItems,
+  newId,
+  suggestionToPrepItem,
+  toIsoDate,
+} from './utils/weddingPlanner';
+
+function loadCached<T>(key: string, fallback: T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? (JSON.parse(saved) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveCached(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn(`Failed to save ${key} to localStorage:`, e);
+  }
+}
+
+function postJson(path: string, body: unknown) {
+  fetch(API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
+
+const REMINDER_KEY = 'myvinh_last_reminder_date';
 
 export default function App() {
   // PIN lock authentication state
@@ -49,7 +88,12 @@ export default function App() {
     }
   });
 
-  const [activeTab, setActiveTab] = useState<'chat' | 'guests' | 'invitations' | 'tables'>('chat');
+  const [expenses, setExpenses] = useState<Expense[]>(() => loadCached<Expense[]>('myvinh_expenses', []));
+  const [prepItems, setPrepItems] = useState<PrepItem[]>(() => loadCached<PrepItem[]>('myvinh_prep_items', []));
+  const [plannerView, setPlannerView] = useState<PlannerView>('finance');
+  const [dataReady, setDataReady] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<TabId>('chat');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedGuestForInvitation, setSelectedGuestForInvitation] = useState<Guest | null>(null);
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
@@ -58,7 +102,7 @@ export default function App() {
 
   // Sync from MongoDB backend on mount
   useEffect(() => {
-    fetch('/api/data')
+    fetch(API_BASE + '/api/data')
       .then((res) => {
         if (!res.ok) throw new Error('API offline');
         return res.json();
@@ -73,11 +117,57 @@ export default function App() {
         if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
           setMessages(data.messages);
         }
+        if (Array.isArray(data.expenses) && data.expenses.length > 0) {
+          setExpenses(data.expenses);
+        }
+        if (Array.isArray(data.prepItems) && data.prepItems.length > 0) {
+          setPrepItems(data.prepItems);
+        }
       })
       .catch((err) => {
         console.log('[Storage] Working in local synchronized mode:', err);
-      });
+      })
+      .finally(() => setDataReady(true));
   }, []);
+
+  useEffect(() => saveCached('myvinh_expenses', expenses), [expenses]);
+  useEffect(() => saveCached('myvinh_prep_items', prepItems), [prepItems]);
+
+  // Trợ lý chủ động nhắc việc: tối đa 1 lần mỗi ngày, sau khi đã đồng bộ dữ liệu
+  useEffect(() => {
+    if (!dataReady || !isUnlocked) return;
+    const today = toIsoDate(new Date());
+    try {
+      if (localStorage.getItem(REMINDER_KEY) === today) return;
+    } catch {
+      /* storage blocked: vẫn nhắc */
+    }
+    const reminder = buildDailyReminder(prepItems, expenses, weddingInfo);
+    try {
+      localStorage.setItem(REMINDER_KEY, today);
+    } catch {
+      /* ignore */
+    }
+    if (!reminder) return;
+    const reminderMsg: ChatMessage = {
+      id: `bot-reminder-${today}`,
+      sender: 'bot',
+      text: reminder.text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actionType: reminder.suggestions.length > 0 ? 'prep_suggestion' : 'general',
+      suggestedPrepItems: reminder.suggestions,
+      suggestedQuickReplies: ['Cần chuẩn bị gì?', 'Tình hình chi tiêu'],
+    };
+    setMessages((prev) => (prev.some((m) => m.id === reminderMsg.id) ? prev : [...prev, reminderMsg]));
+    postJson('/api/chat/messages', reminderMsg);
+    // Chỉ chạy khi dữ liệu sẵn sàng / mở khoá; không chạy lại mỗi lần sửa checklist
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataReady, isUnlocked]);
+
+  const plannerAlertCount = React.useMemo(
+    () => getUrgentPrepItems(prepItems).length + getUpcomingPayments(expenses).length,
+    [prepItems, expenses]
+  );
 
   // Sync to LocalStorage as instant local cache
   useEffect(() => {
@@ -143,7 +233,7 @@ export default function App() {
     setIsLoading(true);
 
     // Persist user message to MongoDB
-    fetch('/api/chat/messages', {
+    fetch(API_BASE + '/api/chat/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userMsg),
@@ -153,7 +243,7 @@ export default function App() {
     const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(API_BASE + '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
@@ -161,6 +251,8 @@ export default function App() {
           message: text,
           existingGuests: guests,
           weddingInfo,
+          expenses,
+          prepItems,
         }),
       });
       clearTimeout(timeoutId);
@@ -179,19 +271,47 @@ export default function App() {
         actionType: data.actionType || 'general',
         extractedGuest: data.extractedGuest,
         duplicateCandidates: data.duplicateCandidates,
+        extractedExpense: data.extractedExpense,
+        suggestedPrepItems: data.suggestedPrepItems,
+        budgetUpdate: data.budgetUpdate,
         suggestedQuickReplies: data.suggestedQuickReplies,
       };
+
+      if (typeof data.budgetUpdate === 'number' && data.budgetUpdate > 0) {
+        handleUpdateBudget(data.budgetUpdate, false);
+      }
 
       setMessages((prev) => [...prev, botMsg]);
 
       // Persist bot message to MongoDB
-      fetch('/api/chat/messages', {
+      fetch(API_BASE + '/api/chat/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(botMsg),
       }).catch(() => {});
     } catch (err) {
       console.warn('Chat request failed, using client-side fallback:', err);
+
+      // Chi tiêu / chuẩn bị: xử lý được hoàn toàn trên máy khi mất mạng
+      const planner = processPlannerMessage(text, guests, weddingInfo, { expenses, prepItems });
+      if (planner) {
+        const plannerMsg: ChatMessage = {
+          id: `bot-${Date.now()}`,
+          sender: 'bot',
+          text: planner.replyText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          actionType: planner.actionType,
+          extractedExpense: planner.extractedExpense,
+          suggestedPrepItems: planner.suggestedPrepItems,
+          budgetUpdate: planner.budgetUpdate,
+          suggestedQuickReplies: planner.suggestedQuickReplies,
+        };
+        if (planner.budgetUpdate) handleUpdateBudget(planner.budgetUpdate, false);
+        setMessages((prev) => [...prev, plannerMsg]);
+        postJson('/api/chat/messages', plannerMsg);
+        return;
+      }
+
       const nlp = extractGuestInfoFromText(text);
       let botText = `Dạ Mỹ Vinh đã nhận tin nhắn!`;
       let actionType: ChatMessage['actionType'] = 'general';
@@ -221,7 +341,7 @@ export default function App() {
 
       setMessages((prev) => [...prev, botMsg]);
 
-      fetch('/api/chat/messages', {
+      fetch(API_BASE + '/api/chat/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(botMsg),
@@ -253,7 +373,7 @@ export default function App() {
     showToast(`Đã thêm "${newGuest.name}" vào danh sách! 🎉`);
 
     // Save to MongoDB
-    fetch('/api/guests', {
+    fetch(API_BASE + '/api/guests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newGuest),
@@ -270,7 +390,7 @@ export default function App() {
     };
     setMessages((prev) => [...prev, confirmMsg]);
 
-    fetch('/api/chat/messages', {
+    fetch(API_BASE + '/api/chat/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(confirmMsg),
@@ -317,7 +437,7 @@ export default function App() {
       );
 
       // Save merged to MongoDB
-      fetch('/api/guests', {
+      fetch(API_BASE + '/api/guests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedTarget),
@@ -346,13 +466,13 @@ export default function App() {
     );
 
     // Update in MongoDB
-    fetch('/api/guests', {
+    fetch(API_BASE + '/api/guests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(merged),
     }).catch(() => {});
 
-    fetch(`/api/guests/${secondaryId}`, { method: 'DELETE' }).catch(() => {});
+    fetch(`${API_BASE}/api/guests/${secondaryId}`, { method: 'DELETE' }).catch(() => {});
 
     showToast(`Đã gộp thành công ${secondary.name} vào ${primary.name}!`);
   };
@@ -366,7 +486,7 @@ export default function App() {
     setGuests((prev) => prev.map((g) => (g.id === id ? updated : g)));
 
     // Save status to MongoDB
-    fetch('/api/guests', {
+    fetch(API_BASE + '/api/guests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -383,7 +503,7 @@ export default function App() {
       setGuests((prev) => prev.filter((g) => g.id !== id));
 
       // Delete from MongoDB
-      fetch(`/api/guests/${id}`, { method: 'DELETE' }).catch(() => {});
+      fetch(`${API_BASE}/api/guests/${id}`, { method: 'DELETE' }).catch(() => {});
       showToast(`Đã xóa "${toDelete.name}" khỏi danh sách.`);
     }
   };
@@ -398,7 +518,7 @@ export default function App() {
       };
       setGuests((prev) => prev.map((g) => (g.id === editingGuest.id ? updated : g)));
 
-      fetch('/api/guests', {
+      fetch(API_BASE + '/api/guests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -414,7 +534,7 @@ export default function App() {
   // Save wedding info to MongoDB
   const handleUpdateWeddingInfo = (info: WeddingInfo) => {
     setWeddingInfo(info);
-    fetch('/api/wedding-info', {
+    fetch(API_BASE + '/api/wedding-info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(info),
@@ -422,9 +542,82 @@ export default function App() {
     showToast('Đã cập nhật thông tin đám cưới vào MongoDB.');
   };
 
+  // ---------- Kế hoạch: tài chính & checklist ----------
+
+  const handleUpdateBudget = (budget: number, toast = true) => {
+    setWeddingInfo((prev) => {
+      const next = { ...prev, totalBudget: budget };
+      postJson('/api/wedding-info', next);
+      return next;
+    });
+    if (toast) showToast('Đã cập nhật ngân sách cưới.');
+  };
+
+  const handleSaveExpense = (expense: Expense) => {
+    const exists = expenses.some((e) => e.id === expense.id);
+    setExpenses((prev) => (exists ? prev.map((e) => (e.id === expense.id ? expense : e)) : [expense, ...prev]));
+    postJson('/api/expenses', expense);
+    showToast(exists ? `Đã cập nhật "${expense.title}".` : `Đã ghi khoản chi "${expense.title}".`);
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    const target = expenses.find((e) => e.id === id);
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    fetch(`${API_BASE}/api/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+    if (target) showToast(`Đã xóa khoản chi "${target.title}".`);
+  };
+
+  const handleAddExpenseFromChat = (data: Partial<Expense>, messageId: string) => {
+    const nowIso = new Date().toISOString();
+    const expense: Expense = {
+      id: newId('e'),
+      title: data.title || 'Khoản chi cưới',
+      category: data.category || 'khac',
+      amount: data.amount || 0,
+      paidAmount: data.paidAmount || 0,
+      payer: data.payer || 'chung',
+      vendor: data.vendor,
+      dueDate: data.dueDate,
+      note: data.note,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    handleSaveExpense(expense);
+    setMessages((prev) => {
+      const next = prev.map((m) => (m.id === messageId ? { ...m, resolved: true } : m));
+      const updated = next.find((m) => m.id === messageId);
+      if (updated) postJson('/api/chat/messages', updated);
+      return next;
+    });
+  };
+
+  const handleSavePrepItem = (item: PrepItem) => {
+    const exists = prepItems.some((p) => p.id === item.id);
+    setPrepItems((prev) => (exists ? prev.map((p) => (p.id === item.id ? item : p)) : [item, ...prev]));
+    postJson('/api/prep-items', item);
+    if (!exists) showToast(`Đã thêm "${item.title}" vào checklist.`);
+    else if (item.done && !prepItems.find((p) => p.id === item.id)?.done) showToast(`Xong: ${item.title} ✓`);
+  };
+
+  const handleDeletePrepItem = (id: string) => {
+    const target = prepItems.find((p) => p.id === id);
+    setPrepItems((prev) => prev.filter((p) => p.id !== id));
+    fetch(`${API_BASE}/api/prep-items/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+    if (target) showToast(`Đã xóa "${target.title}" khỏi checklist.`);
+  };
+
+  const handleAddSuggestions = (suggestions: PrepSuggestion[]) => {
+    const existingKeys = new Set(prepItems.map((p) => p.templateKey).filter(Boolean));
+    const fresh = suggestions.filter((s) => !existingKeys.has(s.templateKey)).map(suggestionToPrepItem);
+    if (fresh.length === 0) return;
+    setPrepItems((prev) => [...fresh, ...prev]);
+    fresh.forEach((item) => postJson('/api/prep-items', item));
+    showToast(fresh.length === 1 ? `Đã thêm "${fresh[0].title}" vào checklist.` : `Đã thêm ${fresh.length} việc vào checklist.`);
+  };
+
   // If not unlocked, render PIN lock screen
   if (!isUnlocked) {
-    return <PinLockScreen onUnlockSuccess={() => setIsUnlocked(true)} />;
+    return <PinLockScreen onUnlockSuccess={() => setIsUnlocked(true)} weddingInfo={weddingInfo} />;
   }
 
   return (
@@ -433,7 +626,7 @@ export default function App() {
       onTabChange={setActiveTab}
       guestCount={guests.length}
       duplicateCount={totalDuplicateAlerts}
-      weddingInfo={weddingInfo}
+      plannerAlertCount={plannerAlertCount}
     >
       {/* Tab 1: Conversational Chatbot */}
       {activeTab === 'chat' && (
@@ -446,6 +639,9 @@ export default function App() {
           onNavigateToTab={setActiveTab}
           onOpenInvitation={(guest) => setSelectedGuestForInvitation(guest)}
           weddingInfo={weddingInfo}
+          prepItems={prepItems}
+          onAddExpense={handleAddExpenseFromChat}
+          onAddPrepSuggestions={handleAddSuggestions}
         />
       )}
 
@@ -486,6 +682,24 @@ export default function App() {
         />
       )}
 
+      {/* Tab 5: Kế hoạch - tài chính & checklist chuẩn bị */}
+      {activeTab === 'planner' && (
+        <PlannerTab
+          guests={guests}
+          weddingInfo={weddingInfo}
+          expenses={expenses}
+          prepItems={prepItems}
+          view={plannerView}
+          onViewChange={setPlannerView}
+          onSaveExpense={handleSaveExpense}
+          onDeleteExpense={handleDeleteExpense}
+          onSavePrepItem={handleSavePrepItem}
+          onDeletePrepItem={handleDeletePrepItem}
+          onAddSuggestions={handleAddSuggestions}
+          onUpdateBudget={handleUpdateBudget}
+        />
+      )}
+
       {/* Invitation Modal */}
       {selectedGuestForInvitation && (
         <InvitationModal
@@ -509,8 +723,11 @@ export default function App() {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-stone-900/90 backdrop-blur-md text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg border border-white/20 animate-in fade-in slide-in-from-top-2 duration-200 flex items-center gap-2 max-w-[90%] text-center">
-          <span>{toastMessage}</span>
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 max-w-[88%] animate-fade-up">
+          <div className="flex items-center gap-2 bg-stone-900/95 backdrop-blur-md text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lift">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
         </div>
       )}
     </PhoneContainer>

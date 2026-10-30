@@ -1,26 +1,184 @@
 @import "tailwindcss";
 
 @theme {
-  --font-serif: "Playfair Display", Georgia, serif;
-  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --color-wedding-red: #9e1b32;
-  --color-wedding-gold: #c5a059;
-  --color-wedding-cream: #fcf9f2;
-  --color-wedding-rose: #f7e6e9;
+  --font-sans: "Be Vietnam Pro", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Playfair Display", "Times New Roman", Georgia, serif;
+
+  /* Wedding wine palette */
+  --color-wine-50: #fdf2f5;
+  --color-wine-100: #fbe3e9;
+  --color-wine-200: #f6c5d1;
+  --color-wine-300: #ec97ad;
+  --color-wine-400: #de6283;
+  --color-wine-500: #c93d62;
+  --color-wine-600: #ab274b;
+  --color-wine-700: #8e1d3d;
+  --color-wine-800: #751a35;
+  --color-wine-900: #5f182e;
+
+  /* Antique gold accent */
+  --color-gold-50: #fbf8ef;
+  --color-gold-100: #f5edd4;
+  --color-gold-200: #ead9a6;
+  --color-gold-300: #dcc175;
+  --color-gold-400: #cfa852;
+  --color-gold-500: #c2923a;
+  --color-gold-600: #a4752e;
+  --color-gold-700: #845a28;
+
+  --color-cream: #f7f2ea;
+  --color-ivory: #fffcf7;
+
+  --shadow-soft: 0 1px 2px rgb(50 25 30 / 0.04), 0 6px 20px -8px rgb(50 25 30 / 0.1);
+  --shadow-card: 0 1px 2px rgb(50 25 30 / 0.05), 0 2px 8px -2px rgb(50 25 30 / 0.06);
+  --shadow-lift: 0 20px 50px -16px rgb(50 15 25 / 0.35), 0 2px 8px rgb(50 15 25 / 0.08);
+  --shadow-wine: 0 8px 20px -8px rgb(142 29 61 / 0.55);
+
+  --animate-fade-in: fade-in 0.18s ease-out both;
+  --animate-fade-up: fade-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-sheet-up: sheet-up 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pop: pop 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-shake: shake 0.45s ease-in-out;
+  --animate-bounce-dot: bounce-dot 1.2s infinite ease-in-out;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes sheet-up {
+    from { opacity: 0; transform: translateY(100%); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-7px); }
+    40%, 80% { transform: translateX(7px); }
+  }
+  @keyframes bounce-dot {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-4px); opacity: 1; }
+  }
 }
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     font-family: var(--font-sans);
+    background: var(--color-cream);
+    color: #1c1917;
     -webkit-tap-highlight-color: transparent;
   }
-
-  h1, h2, h3, .font-serif-wedding {
-    font-family: var(--font-serif);
+  button {
+    cursor: pointer;
+  }
+  input,
+  select,
+  textarea {
+    font: inherit;
   }
 }
 
-/* Custom scrollbar for mobile feel */
+@layer components {
+  /* Buttons: compose as `btn btn-primary btn-md` */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 font-semibold rounded-xl whitespace-nowrap select-none transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-sm {
+    @apply text-xs px-3 min-h-9;
+  }
+  .btn-md {
+    @apply text-[13px] px-4 min-h-11;
+  }
+  .btn-primary {
+    @apply bg-wine-700 text-white shadow-wine hover:bg-wine-800;
+  }
+  .btn-secondary {
+    @apply bg-white text-stone-700 border border-stone-200 hover:border-stone-300 hover:bg-stone-50;
+  }
+  .btn-soft {
+    @apply bg-wine-50 text-wine-700 hover:bg-wine-100;
+  }
+  .btn-ghost {
+    @apply text-stone-500 hover:text-stone-900 hover:bg-stone-100;
+  }
+  .btn-warn {
+    @apply bg-amber-500 text-white hover:bg-amber-600 shadow-[0_8px_20px_-8px_rgb(245_158_11/0.6)];
+  }
+  .btn-icon {
+    @apply w-9 h-9 min-h-0 px-0 rounded-full;
+  }
+
+  /* Form fields */
+  .field {
+    @apply w-full bg-white border border-stone-200 rounded-xl px-3.5 min-h-11 text-sm text-stone-900 placeholder:text-stone-400 outline-none transition-all focus:border-wine-400 focus:ring-4 focus:ring-wine-500/10;
+  }
+  .field-sm {
+    @apply min-h-10 text-[13px] px-3;
+  }
+  .select {
+    @apply appearance-none pr-9 cursor-pointer;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+  }
+  .label {
+    @apply block text-[11px] font-semibold uppercase tracking-wider text-stone-500 mb-1.5;
+  }
+
+  /* Surfaces */
+  .card {
+    @apply bg-white rounded-2xl border border-stone-200/70 shadow-card;
+  }
+  .eyebrow {
+    @apply text-[10px] font-bold uppercase tracking-[0.2em] text-gold-600;
+  }
+
+  /* Filter chips */
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors;
+  }
+  .chip-on {
+    @apply bg-stone-900 text-white border-stone-900 shadow-xs;
+  }
+  .chip-off {
+    @apply bg-white text-stone-600 border-stone-200 hover:border-stone-300 hover:bg-stone-50;
+  }
+
+  /* Segmented control */
+  .seg {
+    @apply flex p-1 bg-stone-100 rounded-xl text-xs;
+  }
+  .seg-btn {
+    @apply flex-1 min-h-8 px-2 rounded-lg font-medium text-stone-500 transition-all hover:text-stone-800;
+  }
+  .seg-on {
+    @apply bg-white text-stone-900 shadow-xs;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+@utility pb-safe-0 {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -29,9 +187,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(197, 160, 89, 0.3);
+  background: rgba(194, 146, 58, 0.3);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(197, 160, 89, 0.6);
+  background: rgba(194, 146, 58, 0.6);
 }

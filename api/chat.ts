@@ -20,8 +20,11 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { message, existingGuests, weddingInfo } = req.body || {};
-    const result = await processUserMessage(message, existingGuests || [], weddingInfo);
+    const { message, existingGuests, weddingInfo, expenses, prepItems } = req.body || {};
+    const result = await processUserMessage(message, existingGuests || [], weddingInfo, {
+      expenses: expenses || [],
+      prepItems: prepItems || [],
+    });
     return res.status(200).json(result);
   } catch (error: any) {
     console.error('Vercel API error in /api/chat:', error);

@@ -1,13 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
   Search,
-  Filter,
   UserPlus,
   AlertTriangle,
   CheckCircle2,
-  Clock,
-  XCircle,
-  HelpCircle,
   Phone,
   MessageSquare,
   Edit2,
@@ -16,10 +12,12 @@ import {
   ChevronDown,
   RefreshCw,
   X,
-  Sparkles
+  UtensilsCrossed,
+  ScanSearch,
 } from 'lucide-react';
 import { Guest, GuestSide, RelationshipCategory, InvitationStatus, DuplicateCandidate } from '../types';
 import { findDuplicateCandidates } from '../utils/vietnameseNlp';
+import { Avatar, SidePill, SIDE_LABEL, STATUS_META, STATUS_ORDER, TabHeader, Modal, IconTile } from './ui';
 
 interface GuestListTabProps {
   guests: Guest[];
@@ -30,6 +28,35 @@ interface GuestListTabProps {
   onOpenInvitation: (guest: Guest) => void;
   onMergeGuests: (primaryId: string, secondaryId: string) => void;
 }
+
+const StatusSelect: React.FC<{ value: InvitationStatus; onChange: (s: InvitationStatus) => void }> = ({ value, onChange }) => {
+  const meta = STATUS_META[value];
+  return (
+    <div className="relative shrink-0">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as InvitationStatus)}
+        className={`appearance-none text-[11px] font-semibold pl-5 pr-6 py-1 rounded-full border cursor-pointer outline-none focus:ring-2 focus:ring-wine-500/20 transition-colors ${meta.pill}`}
+        aria-label="Trạng thái thiệp mời"
+      >
+        {STATUS_ORDER.map((s) => (
+          <option key={s} value={s}>
+            {STATUS_META[s].label}
+          </option>
+        ))}
+      </select>
+      <span className={`absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 opacity-60 pointer-events-none" />
+    </div>
+  );
+};
+
+const CATEGORY_CHIPS: { id: RelationshipCategory; label: string }[] = [
+  { id: 'ban_be', label: 'Bạn bè' },
+  { id: 'dong_nghiep', label: 'Đồng nghiệp' },
+  { id: 'ho_hang', label: 'Họ hàng' },
+  { id: 'vip', label: 'VIP' },
+];
 
 export const GuestListTab: React.FC<GuestListTabProps> = ({
   guests,
@@ -67,13 +94,9 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({
   }, [guests, searchQuery, selectedSide, selectedCategory, selectedStatus]);
 
   // Overall list statistics
-  const totalInvites = guests.length;
   const totalHeadcount = guests.reduce((sum, g) => sum + (g.count || 1), 0);
   const confirmedCount = guests
     .filter((g) => g.status === 'xac_nhan')
-    .reduce((sum, g) => sum + (g.count || 1), 0);
-  const pendingCount = guests
-    .filter((g) => g.status === 'da_gui' || g.status === 'chua_chac')
     .reduce((sum, g) => sum + (g.count || 1), 0);
 
   // Find all internal duplicate pairs across the entire list
@@ -94,367 +117,269 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({
     return pairs;
   }, [guests]);
 
-  const getStatusBadge = (status: InvitationStatus) => {
-    switch (status) {
-      case 'xac_nhan':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            <span>Đi được</span>
-          </span>
-        );
-      case 'da_gui':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-800 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-            <Clock className="w-3 h-3 text-blue-600" />
-            <span>Đã gửi thiệp</span>
-          </span>
-        );
-      case 'chua_chac':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-            <HelpCircle className="w-3 h-3 text-amber-600" />
-            <span>Chưa chắc</span>
-          </span>
-        );
-      case 'tu_choi':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md border border-stone-200">
-            <XCircle className="w-3 h-3 text-stone-500" />
-            <span>Bận không đi</span>
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-stone-600 bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200">
-            <span>Chưa gửi</span>
-          </span>
-        );
-    }
-  };
+  const noChipFilter = selectedSide === 'all' && selectedCategory === 'all' && selectedStatus === 'all';
+  const hasFilter = !noChipFilter || !!searchQuery;
 
   return (
-    <div className="flex flex-col h-full bg-[#FAF7F2] text-stone-800 overflow-hidden">
-      {/* Top Action Bar - Pinned */}
-      <div className="p-3 bg-white border-b border-stone-200/80 shrink-0 space-y-2.5 z-10 shadow-2xs">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h1 className="text-base font-semibold text-stone-900 flex items-center gap-1.5">
-              <span>Danh Sách Khách Mời</span>
-              <span className="text-xs font-normal text-stone-500">({guests.length})</span>
-            </h1>
-            <p className="text-[11px] text-stone-500">
-              Tổng {totalHeadcount} người · {confirmedCount} đã chốt
-            </p>
-          </div>
-
-          <div className="flex items-center gap-1.5">
+    <div className="flex flex-col h-full bg-cream text-stone-800 overflow-hidden">
+      <TabHeader
+        title="Khách mời"
+        subtitle={
+          <>
+            <span className="font-semibold text-stone-700">{guests.length}</span> thiệp ·{' '}
+            <span className="font-semibold text-stone-700">{totalHeadcount}</span> người ·{' '}
+            <span className="font-semibold text-emerald-700">{confirmedCount}</span> đã chốt
+          </>
+        }
+        actions={
+          <>
             <button
               onClick={() => setIsDuplicateModalOpen(true)}
-              className={`min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-all border ${
-                duplicatePairs.length > 0
-                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                  : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+              className={`btn btn-icon relative ${
+                duplicatePairs.length > 0 ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' : 'btn-ghost'
               }`}
+              title="Quét trùng lặp"
+              aria-label="Quét trùng lặp"
             >
-              <AlertTriangle className={`w-3.5 h-3.5 ${duplicatePairs.length > 0 ? 'text-amber-600' : 'text-stone-400'}`} />
-              <span>Quét trùng {duplicatePairs.length > 0 && `(${duplicatePairs.length})`}</span>
+              <ScanSearch className="w-[18px] h-[18px]" />
+              {duplicatePairs.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+                  {duplicatePairs.length}
+                </span>
+              )}
             </button>
-
-            <button
-              onClick={onAddGuestClick}
-              className="min-h-[38px] px-3 py-1.5 bg-rose-800 hover:bg-rose-900 active:scale-95 text-white rounded-lg text-xs font-medium flex items-center gap-1 transition-all shadow-xs"
-            >
+            <button onClick={onAddGuestClick} className="btn btn-primary btn-sm">
               <UserPlus className="w-3.5 h-3.5" />
-              <span>Thêm khách</span>
+              <span>Thêm</span>
             </button>
-          </div>
-        </div>
-
-        {/* Search Input */}
+          </>
+        }
+      >
+        {/* Search */}
         <div className="relative">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm theo tên, sđt, cơ quan, ghi chú..."
-            className="w-full pl-9 pr-3.5 py-2 bg-stone-100 hover:bg-stone-50 focus:bg-white text-xs text-stone-900 placeholder:text-stone-400 rounded-xl border border-stone-200 focus:border-rose-600 focus:outline-hidden transition-all"
+            placeholder="Tìm theo tên, số điện thoại, ghi chú…"
+            className="field field-sm pl-10 pr-9 bg-stone-50 focus:bg-white"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1"
+              aria-label="Xóa tìm kiếm"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        {/* Filter Segmented Buttons */}
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+        {/* Filters */}
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-none -mx-4 px-4">
           <button
-            onClick={() => setSelectedSide('all')}
-            className={`whitespace-nowrap shrink-0 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              selectedSide === 'all'
-                ? 'bg-rose-800 text-white shadow-xs'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
+            onClick={() => {
+              setSelectedSide('all');
+              setSelectedCategory('all');
+              setSelectedStatus('all');
+            }}
+            className={`chip ${noChipFilter ? 'chip-on' : 'chip-off'}`}
           >
-            Tất cả phe
+            Tất cả
           </button>
-          <button
-            onClick={() => setSelectedSide('nha_trai')}
-            className={`whitespace-nowrap shrink-0 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              selectedSide === 'nha_trai'
-                ? 'bg-blue-700 text-white shadow-xs'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
-          >
-            Nhà Trai
-          </button>
-          <button
-            onClick={() => setSelectedSide('nha_gai')}
-            className={`whitespace-nowrap shrink-0 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              selectedSide === 'nha_gai'
-                ? 'bg-pink-700 text-white shadow-xs'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
-          >
-            Nhà Gái
-          </button>
-          <button
-            onClick={() => setSelectedCategory(selectedCategory === 'ban_be' ? 'all' : 'ban_be')}
-            className={`whitespace-nowrap shrink-0 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              selectedCategory === 'ban_be'
-                ? 'bg-amber-700 text-white shadow-xs'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
-          >
-            Bạn bè
-          </button>
-          <button
-            onClick={() => setSelectedCategory(selectedCategory === 'dong_nghiep' ? 'all' : 'dong_nghiep')}
-            className={`whitespace-nowrap shrink-0 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              selectedCategory === 'dong_nghiep'
-                ? 'bg-emerald-700 text-white shadow-xs'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
-          >
-            Đồng nghiệp
-          </button>
-          <button
-            onClick={() => setSelectedCategory(selectedCategory === 'ho_hang' ? 'all' : 'ho_hang')}
-            className={`whitespace-nowrap shrink-0 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
-              selectedCategory === 'ho_hang'
-                ? 'bg-purple-700 text-white shadow-xs'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
-          >
-            Họ hàng
-          </button>
+          {(['nha_trai', 'nha_gai'] as GuestSide[]).map((side) => (
+            <button
+              key={side}
+              onClick={() => setSelectedSide(selectedSide === side ? 'all' : side)}
+              className={`chip ${selectedSide === side ? 'chip-on' : 'chip-off'}`}
+            >
+              {SIDE_LABEL[side]}
+            </button>
+          ))}
+          <span className="w-px bg-stone-200 my-1 shrink-0" />
+          {CATEGORY_CHIPS.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedCategory(selectedCategory === c.id ? 'all' : c.id)}
+              className={`chip ${selectedCategory === c.id ? 'chip-on' : 'chip-off'}`}
+            >
+              {c.label}
+            </button>
+          ))}
+          <span className="w-px bg-stone-200 my-1 shrink-0" />
+          {(['xac_nhan', 'chua_gui', 'chua_chac'] as InvitationStatus[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSelectedStatus(selectedStatus === s ? 'all' : s)}
+              className={`chip ${selectedStatus === s ? 'chip-on' : 'chip-off'}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${selectedStatus === s ? 'bg-white' : STATUS_META[s].dot}`} />
+              {STATUS_META[s].label}
+            </button>
+          ))}
         </div>
-      </div>
+      </TabHeader>
 
-      {/* Guest List Content */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 overscroll-contain pb-8">
+      {/* Guest list */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain pb-8">
         {filteredGuests.length === 0 ? (
-          <div className="text-center py-12 px-4 bg-white rounded-2xl border border-stone-200/80">
-            <Users className="w-10 h-10 text-stone-300 mx-auto mb-2" />
-            <h3 className="text-sm font-semibold text-stone-700">Chưa tìm thấy khách mời nào</h3>
-            <p className="text-xs text-stone-500 mt-1 max-w-xs mx-auto">
-              {searchQuery
-                ? 'Hãy thử tìm kiếm với từ khóa khác hoặc xóa bộ lọc.'
-                : 'Nhắn cho trợ lý ảo Mỹ Vinh để tự động thêm khách nhé!'}
+          <div className="card text-center py-14 px-6 animate-fade-up">
+            <div className="w-14 h-14 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-3">
+              <Users className="w-6 h-6 text-stone-400" />
+            </div>
+            <h3 className="font-serif text-base text-stone-800">Chưa có khách mời nào</h3>
+            <p className="text-xs text-stone-500 mt-1.5 max-w-xs mx-auto leading-relaxed">
+              {hasFilter
+                ? 'Thử từ khóa khác hoặc bỏ bớt bộ lọc.'
+                : 'Nhắn cho trợ lý Mỹ Vinh để tự động thêm khách, hoặc bấm "Thêm" ở góc trên.'}
             </p>
           </div>
         ) : (
           filteredGuests.map((guest) => (
-            <div
-              key={guest.id}
-              className="bg-white rounded-xl border border-stone-200/80 p-3 shadow-2xs hover:border-rose-200 transition-all flex flex-col gap-2"
-            >
-              <div className="flex items-start justify-between gap-2">
+            <article key={guest.id} className="card p-3.5 transition-shadow hover:shadow-soft animate-fade-up">
+              <div className="flex items-start gap-3">
+                <Avatar name={guest.name} side={guest.side} />
+
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-semibold text-stone-900 text-sm">{guest.name}</span>
-                    <span
-                      className={`text-[10px] font-medium px-1.5 py-0.2 rounded-md ${
-                        guest.side === 'nha_trai'
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : guest.side === 'nha_gai'
-                          ? 'bg-pink-50 text-pink-700 border border-pink-200'
-                          : 'bg-stone-100 text-stone-600 border border-stone-200'
-                      }`}
-                    >
-                      {guest.side === 'nha_trai' ? 'Nhà Trai' : guest.side === 'nha_gai' ? 'Nhà Gái' : 'Chung'}
-                    </span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-stone-900 text-[14px] leading-tight">{guest.name}</span>
+                        <SidePill side={guest.side} />
+                      </div>
+                      <div className="text-xs text-stone-500 mt-0.5 truncate">{guest.relationshipDetail}</div>
+                    </div>
+                    <StatusSelect value={guest.status} onChange={(s) => onUpdateStatus(guest.id, s)} />
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs text-stone-500 mt-0.5 flex-wrap">
-                    <span>{guest.relationshipDetail}</span>
-                    <span>·</span>
-                    <span className="font-semibold text-stone-700">{guest.count} người (suất)</span>
+                  <div className="mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap text-[11.5px] text-stone-600">
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-stone-400" />
+                      <span className="font-semibold text-stone-800">{guest.count}</span> suất
+                    </span>
+                    {guest.phone && (
+                      <span className="inline-flex items-center gap-1 font-mono">
+                        <Phone className="w-3.5 h-3.5 text-stone-400" />
+                        {guest.phone}
+                      </span>
+                    )}
                     {guest.tableNumber && (
-                      <>
-                        <span>·</span>
-                        <span className="text-rose-700 font-medium">{guest.tableNumber}</span>
-                      </>
+                      <span className="inline-flex items-center gap-1 text-wine-700 font-medium">
+                        <UtensilsCrossed className="w-3.5 h-3.5" />
+                        {guest.tableNumber}
+                      </span>
                     )}
                   </div>
 
-                  {guest.phone && (
-                    <div className="flex items-center gap-1 text-[11px] text-stone-600 mt-1 font-mono">
-                      <Phone className="w-3 h-3 text-stone-400" />
-                      <span>{guest.phone}</span>
-                    </div>
-                  )}
-
                   {guest.note && (
-                    <div className="text-[11px] text-stone-500 mt-1 bg-stone-50 p-1.5 rounded border border-stone-100 italic">
+                    <div className="mt-2 text-[11.5px] text-stone-500 italic bg-stone-50 rounded-lg px-2.5 py-1.5 border border-stone-100">
                       {guest.note}
                     </div>
                   )}
                 </div>
-
-                {/* Status Selector Dropdown */}
-                <div className="shrink-0 flex flex-col items-end gap-1">
-                  <select
-                    value={guest.status}
-                    onChange={(e) => onUpdateStatus(guest.id, e.target.value as InvitationStatus)}
-                    className="text-xs bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-lg px-2 py-1 text-stone-700 focus:outline-hidden focus:border-rose-600 transition-colors cursor-pointer"
-                  >
-                    <option value="chua_gui">⚪ Chưa gửi</option>
-                    <option value="da_gui">🔵 Đã gửi</option>
-                    <option value="xac_nhan">🟢 Đi được</option>
-                    <option value="chua_chac">🟡 Chưa chắc</option>
-                    <option value="tu_choi">🔴 Bận</option>
-                  </select>
-                </div>
               </div>
 
-              {/* Action Toolbar */}
-              <div className="flex items-center justify-between pt-2 border-t border-stone-100 gap-1 text-xs">
-                <button
-                  onClick={() => onOpenInvitation(guest)}
-                  className="flex-1 min-h-[36px] bg-rose-50 hover:bg-rose-100 text-rose-800 font-medium rounded-lg flex items-center justify-center gap-1 transition-colors border border-rose-200/50"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 text-rose-600" />
+              <div className="mt-3 pt-3 border-t border-stone-100 flex items-center gap-1.5">
+                <button onClick={() => onOpenInvitation(guest)} className="btn btn-soft btn-sm flex-1">
+                  <MessageSquare className="w-3.5 h-3.5" />
                   <span>Soạn lời mời</span>
                 </button>
-
-                <button
-                  onClick={() => onEditGuest(guest)}
-                  className="min-h-[36px] min-w-[36px] flex items-center justify-center text-stone-500 hover:text-stone-800 bg-stone-50 hover:bg-stone-100 rounded-lg border border-stone-200 transition-colors"
-                  title="Chỉnh sửa thông tin"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
+                <button onClick={() => onEditGuest(guest)} className="btn btn-ghost btn-icon" title="Chỉnh sửa thông tin" aria-label="Chỉnh sửa">
+                  <Edit2 className="w-4 h-4" />
                 </button>
-
                 <button
                   onClick={() => onDeleteGuest(guest.id)}
-                  className="min-h-[36px] min-w-[36px] flex items-center justify-center text-rose-600 hover:text-rose-800 bg-rose-50/50 hover:bg-rose-100 rounded-lg border border-rose-200/50 transition-colors"
+                  className="btn btn-icon text-stone-400 hover:text-wine-700 hover:bg-wine-50"
                   title="Xóa khách này"
+                  aria-label="Xóa"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-            </div>
+            </article>
           ))
         )}
       </div>
 
-      {/* Duplicate Scan Modal */}
-      {isDuplicateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl overflow-hidden">
-            <div className="p-4 border-b border-stone-200 flex items-center justify-between bg-amber-50/60">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
-                <div>
-                  <h2 className="font-semibold text-stone-900 text-sm">Kết Quả Rà Soát Trùng Lặp</h2>
-                  <p className="text-[11px] text-stone-500">
-                    Phát hiện {duplicatePairs.length} trường hợp có khả năng trùng
-                  </p>
+      {/* Duplicate scan modal */}
+      <Modal
+        open={isDuplicateModalOpen}
+        onClose={() => setIsDuplicateModalOpen(false)}
+        size="lg"
+        title="Rà soát trùng lặp"
+        subtitle={
+          duplicatePairs.length > 0
+            ? `Phát hiện ${duplicatePairs.length} cặp khách có khả năng trùng`
+            : 'Không phát hiện trường hợp nghi trùng'
+        }
+        icon={
+          <IconTile className={duplicatePairs.length > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}>
+            {duplicatePairs.length > 0 ? <AlertTriangle className="w-[18px] h-[18px]" /> : <CheckCircle2 className="w-[18px] h-[18px]" />}
+          </IconTile>
+        }
+        footer={
+          <button onClick={() => setIsDuplicateModalOpen(false)} className="btn btn-secondary btn-md w-full">
+            Đóng
+          </button>
+        }
+      >
+        <div className="p-4 space-y-3">
+          {duplicatePairs.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+              </div>
+              <h3 className="font-serif text-base text-stone-800">Danh sách sạch hoàn toàn</h3>
+              <p className="text-xs text-stone-500 mt-1.5 max-w-xs mx-auto leading-relaxed">
+                Không tìm thấy cặp khách nào có tên, số điện thoại hoặc mối quan hệ trùng lặp.
+              </p>
+            </div>
+          ) : (
+            duplicatePairs.map((pair, idx) => (
+              <div key={idx} className="card overflow-hidden border-amber-200/80">
+                <div className="px-4 py-2 flex items-center justify-between bg-amber-50 border-b border-amber-100 text-[11px]">
+                  <span className="font-bold uppercase tracking-wider text-amber-800">Cặp nghi vấn #{idx + 1}</span>
+                  <span className="font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-md">
+                    Tương đồng {pair.candidate.similarityScore}%
+                  </span>
+                </div>
+
+                <div className="p-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    {[pair.guestA, pair.guestB].map((g) => (
+                      <div key={g.id} className="rounded-xl bg-stone-50 border border-stone-100 p-2.5 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar name={g.name} side={g.side} className="w-8 h-8 text-[10px]" />
+                          <div className="min-w-0">
+                            <div className="font-semibold text-xs text-stone-900 truncate">{g.name}</div>
+                            <div className="text-[10.5px] text-stone-500 truncate">{SIDE_LABEL[g.side]}</div>
+                          </div>
+                        </div>
+                        <div className="text-[11px] text-stone-600 mt-2 truncate">{g.relationshipDetail}</div>
+                        <div className="text-[11px] text-stone-500">
+                          {g.count} suất
+                          {g.phone && <span className="font-mono"> · {g.phone}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-[11.5px] text-amber-800 bg-amber-50/60 rounded-lg px-3 py-2">
+                    <span className="font-semibold">Lý do: </span>
+                    {pair.candidate.reason}
+                  </div>
+
+                  <button onClick={() => onMergeGuests(pair.guestA.id, pair.guestB.id)} className="btn btn-warn btn-md w-full">
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span className="truncate">Gộp thành một (giữ {pair.guestA.name})</span>
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => setIsDuplicateModalOpen(false)}
-                className="p-1 text-stone-400 hover:text-stone-600 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 overflow-y-auto space-y-3.5 flex-1">
-              {duplicatePairs.length === 0 ? (
-                <div className="text-center py-8">
-                  <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
-                  <h3 className="font-semibold text-stone-800 text-sm">Danh sách sạch hoàn toàn!</h3>
-                  <p className="text-xs text-stone-500 mt-1">
-                    Không tìm thấy cặp khách nào có tên, số điện thoại hoặc mối quan hệ trùng lặp.
-                  </p>
-                </div>
-              ) : (
-                duplicatePairs.map((pair, idx) => (
-                  <div key={idx} className="border border-amber-200 rounded-xl p-3 bg-amber-50/40 space-y-2.5">
-                    <div className="flex items-center justify-between text-xs font-semibold text-amber-900 pb-1 border-b border-amber-200/60">
-                      <span>Cặp nghi vấn #{idx + 1}</span>
-                      <span className="font-mono text-[10px] bg-amber-200/80 px-1.5 py-0.5 rounded text-amber-900">
-                        Độ tương đồng {pair.candidate.similarityScore}%
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {/* Guest 1 */}
-                      <div className="bg-white p-2.5 rounded-lg border border-stone-200">
-                        <div className="font-semibold text-stone-900">{pair.guestA.name}</div>
-                        <div className="text-[11px] text-stone-500 mt-0.5">{pair.guestA.relationshipDetail}</div>
-                        <div className="text-[11px] text-stone-600">{pair.guestA.count} suất · {pair.guestA.side === 'nha_trai' ? 'Nhà Trai' : 'Nhà Gái'}</div>
-                        {pair.guestA.phone && <div className="text-[10px] font-mono text-stone-500 mt-1">{pair.guestA.phone}</div>}
-                      </div>
-
-                      {/* Guest 2 */}
-                      <div className="bg-white p-2.5 rounded-lg border border-stone-200">
-                        <div className="font-semibold text-stone-900">{pair.guestB.name}</div>
-                        <div className="text-[11px] text-stone-500 mt-0.5">{pair.guestB.relationshipDetail}</div>
-                        <div className="text-[11px] text-stone-600">{pair.guestB.count} suất · {pair.guestB.side === 'nha_trai' ? 'Nhà Trai' : 'Nhà Gái'}</div>
-                        {pair.guestB.phone && <div className="text-[10px] font-mono text-stone-500 mt-1">{pair.guestB.phone}</div>}
-                      </div>
-                    </div>
-
-                    <div className="text-[11px] text-amber-800">
-                      <span className="font-medium">Lý do: </span>
-                      {pair.candidate.reason}
-                    </div>
-
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={() => {
-                          onMergeGuests(pair.guestA.id, pair.guestB.id);
-                        }}
-                        className="flex-1 py-1.5 px-3 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-all"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Gộp thành 1 người (Giữ {pair.guestA.name})</span>
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="p-3 border-t border-stone-200 bg-stone-50 text-right">
-              <button
-                onClick={() => setIsDuplicateModalOpen(false)}
-                className="px-4 py-2 bg-stone-800 hover:bg-stone-900 text-white rounded-xl text-xs font-medium transition-colors"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
+            ))
+          )}
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

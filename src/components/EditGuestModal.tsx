@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check } from 'lucide-react';
+import { Check, Minus, Plus, UserPlus, UserPen } from 'lucide-react';
 import { Guest, GuestSide, RelationshipCategory, InvitationStatus } from '../types';
+import { Modal, IconTile, SIDE_LABEL, CATEGORY_LABEL, STATUS_META, STATUS_ORDER } from './ui';
 
 interface EditGuestModalProps {
   guest: Guest | null;
@@ -9,43 +10,27 @@ interface EditGuestModalProps {
   onSave: (guestData: Partial<Guest>) => void;
 }
 
-export const EditGuestModal: React.FC<EditGuestModalProps> = ({
-  guest,
-  isOpen,
-  onClose,
-  onSave,
-}) => {
-  const [formData, setFormData] = useState<Partial<Guest>>({
-    name: '',
-    side: 'nha_trai',
-    relationshipCategory: 'ban_be',
-    relationshipDetail: 'Bạn bè',
-    count: 1,
-    phone: '',
-    status: 'chua_gui',
-    tableNumber: '',
-    note: '',
-  });
+const EMPTY_FORM: Partial<Guest> = {
+  name: '',
+  side: 'nha_trai',
+  relationshipCategory: 'ban_be',
+  relationshipDetail: 'Bạn bè',
+  count: 1,
+  phone: '',
+  status: 'chua_gui',
+  tableNumber: '',
+  note: '',
+};
+
+const SIDES: GuestSide[] = ['nha_trai', 'nha_gai', 'chung'];
+const CATEGORIES: RelationshipCategory[] = ['ban_be', 'dong_nghiep', 'ho_hang', 'vip', 'khac'];
+
+export const EditGuestModal: React.FC<EditGuestModalProps> = ({ guest, isOpen, onClose, onSave }) => {
+  const [formData, setFormData] = useState<Partial<Guest>>(EMPTY_FORM);
 
   useEffect(() => {
-    if (guest) {
-      setFormData(guest);
-    } else {
-      setFormData({
-        name: '',
-        side: 'nha_trai',
-        relationshipCategory: 'ban_be',
-        relationshipDetail: 'Bạn bè',
-        count: 1,
-        phone: '',
-        status: 'chua_gui',
-        tableNumber: '',
-        note: '',
-      });
-    }
+    setFormData(guest ? guest : EMPTY_FORM);
   }, [guest, isOpen]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,166 +39,187 @@ export const EditGuestModal: React.FC<EditGuestModalProps> = ({
     onClose();
   };
 
+  const count = formData.count || 1;
+  const setCount = (next: number) => setFormData({ ...formData, count: Math.min(20, Math.max(1, next)) });
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-        <div className="p-4 border-b border-stone-200 flex items-center justify-between bg-stone-50">
-          <h2 className="font-semibold text-stone-900 text-sm">
-            {guest ? 'Chỉnh Sửa Khách Mời' : 'Thêm Khách Mời Mới'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 text-stone-400 hover:text-stone-600 rounded-lg"
-          >
-            <X className="w-5 h-5" />
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title={guest ? 'Chỉnh sửa khách mời' : 'Thêm khách mời'}
+      subtitle={guest ? guest.name : 'Nhập thông tin người được mời'}
+      icon={
+        <IconTile className="bg-wine-50 text-wine-700">
+          {guest ? <UserPen className="w-[18px] h-[18px]" /> : <UserPlus className="w-[18px] h-[18px]" />}
+        </IconTile>
+      }
+      footer={
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="btn btn-secondary btn-md flex-1">
+            Hủy
+          </button>
+          <button type="submit" form="guest-form" className="btn btn-primary btn-md flex-[1.4]">
+            <Check className="w-4 h-4" />
+            <span>{guest ? 'Lưu thay đổi' : 'Thêm vào danh sách'}</span>
           </button>
         </div>
+      }
+    >
+      <form id="guest-form" onSubmit={handleSubmit} className="p-5 space-y-4">
+        <div>
+          <label className="label">
+            Họ tên / Danh xưng <span className="text-wine-600">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            autoFocus={!guest}
+            value={formData.name || ''}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="Ví dụ: Anh Nam, Chị Lan…"
+            className="field"
+          />
+        </div>
 
-        <form onSubmit={handleSubmit} className="p-4 overflow-y-auto space-y-3.5 flex-1 text-xs">
+        <div>
+          <label className="label">Phe mời</label>
+          <div className="seg">
+            {SIDES.map((side) => (
+              <button
+                key={side}
+                type="button"
+                onClick={() => setFormData({ ...formData, side })}
+                className={`seg-btn min-h-9 ${formData.side === side ? 'seg-on' : ''}`}
+              >
+                {SIDE_LABEL[side]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-stone-600 font-medium mb-1">
-              Họ tên / Danh xưng <span className="text-rose-600">*</span>:
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.name || ''}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Ví dụ: Anh Nam, Chị Lan..."
-              className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl focus:bg-white focus:border-rose-600 focus:outline-hidden text-xs"
-            />
+            <label className="label">Nhóm quan hệ</label>
+            <select
+              value={formData.relationshipCategory || 'ban_be'}
+              onChange={(e) => setFormData({ ...formData, relationshipCategory: e.target.value as RelationshipCategory })}
+              className="field select"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABEL[c]}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-stone-600 font-medium mb-1">Phe mời:</label>
-              <select
-                value={formData.side || 'nha_trai'}
-                onChange={(e) => setFormData({ ...formData, side: e.target.value as GuestSide })}
-                className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs"
+          <div>
+            <label className="label">Số suất cỗ</label>
+            <div className="flex items-center border border-stone-200 rounded-xl overflow-hidden min-h-11">
+              <button
+                type="button"
+                onClick={() => setCount(count - 1)}
+                className="w-11 h-11 flex items-center justify-center text-stone-500 hover:bg-stone-50 active:bg-stone-100"
+                aria-label="Giảm"
               >
-                <option value="nha_trai">Nhà Trai (Chú rể)</option>
-                <option value="nha_gai">Nhà Gái (Cô dâu)</option>
-                <option value="chung">Khách chung hai bạn</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-stone-600 font-medium mb-1">Số suất cỗ / người:</label>
+                <Minus className="w-4 h-4" />
+              </button>
               <input
                 type="number"
                 min={1}
                 max={20}
-                value={formData.count || 1}
-                onChange={(e) => setFormData({ ...formData, count: Number(e.target.value) })}
-                className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono"
+                value={count}
+                onChange={(e) => setCount(Number(e.target.value))}
+                className="flex-1 min-w-0 text-center font-semibold text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-stone-600 font-medium mb-1">Nhóm quan hệ:</label>
-              <select
-                value={formData.relationshipCategory || 'ban_be'}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    relationshipCategory: e.target.value as RelationshipCategory,
-                  })
-                }
-                className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs"
+              <button
+                type="button"
+                onClick={() => setCount(count + 1)}
+                className="w-11 h-11 flex items-center justify-center text-stone-500 hover:bg-stone-50 active:bg-stone-100"
+                aria-label="Tăng"
               >
-                <option value="ban_be">Bạn bè</option>
-                <option value="dong_nghiep">Đồng nghiệp</option>
-                <option value="ho_hang">Họ hàng</option>
-                <option value="vip">Đối tác / VIP</option>
-                <option value="khac">Khác</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-stone-600 font-medium mb-1">Mô tả chi tiết:</label>
-              <input
-                type="text"
-                value={formData.relationshipDetail || ''}
-                onChange={(e) => setFormData({ ...formData, relationshipDetail: e.target.value })}
-                placeholder="Ví dụ: Bạn cấp 3, Họ nội..."
-                className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs"
-              />
+                <Plus className="w-4 h-4" />
+              </button>
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-stone-600 font-medium mb-1">Số điện thoại:</label>
-              <input
-                type="tel"
-                value={formData.phone || ''}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="09..."
-                className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono"
-              />
-            </div>
+        <div>
+          <label className="label">Mô tả quan hệ</label>
+          <input
+            type="text"
+            value={formData.relationshipDetail || ''}
+            onChange={(e) => setFormData({ ...formData, relationshipDetail: e.target.value })}
+            placeholder="Ví dụ: Bạn cấp 3, Họ nội, Đồng nghiệp FPT…"
+            className="field"
+          />
+        </div>
 
-            <div>
-              <label className="block text-stone-600 font-medium mb-1">Trạng thái RSVP:</label>
-              <select
-                value={formData.status || 'chua_gui'}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value as InvitationStatus })
-                }
-                className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs"
-              >
-                <option value="chua_gui">⚪ Chưa gửi</option>
-                <option value="da_gui">🔵 Đã gửi thiệp</option>
-                <option value="xac_nhan">🟢 Đi được</option>
-                <option value="chua_chac">🟡 Chưa chắc</option>
-                <option value="tu_choi">🔴 Bận không đi</option>
-              </select>
-            </div>
-          </div>
-
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-stone-600 font-medium mb-1">Xếp bàn / Mâm:</label>
+            <label className="label">Số điện thoại</label>
             <input
-              type="text"
-              value={formData.tableNumber || ''}
-              onChange={(e) => setFormData({ ...formData, tableNumber: e.target.value })}
-              placeholder="Ví dụ: Bàn 02 (Bạn ĐH)..."
-              className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs"
+              type="tel"
+              value={formData.phone || ''}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="09…"
+              className="field font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-stone-600 font-medium mb-1">Ghi chú thêm:</label>
-            <textarea
-              rows={2}
-              value={formData.note || ''}
-              onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-              placeholder="Ví dụ: Kèm 1 bé, ăn chay, ở xa lên sớm..."
-              className="w-full p-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs resize-none"
-            />
+            <label className="label">Trạng thái</label>
+            <select
+              value={formData.status || 'chua_gui'}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as InvitationStatus })}
+              className="field select"
+            >
+              {STATUS_ORDER.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_META[s].label}
+                </option>
+              ))}
+            </select>
           </div>
+        </div>
 
-          <div className="pt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-medium"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-2.5 bg-rose-800 hover:bg-rose-900 active:scale-95 text-white rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 shadow-xs"
-            >
-              <Check className="w-4 h-4" />
-              <span>{guest ? 'Cập nhật' : 'Thêm vào danh sách'}</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div>
+          <label className="label">Xếp bàn / Mâm</label>
+          <input
+            type="text"
+            value={formData.tableNumber || ''}
+            onChange={(e) => setFormData({ ...formData, tableNumber: e.target.value })}
+            placeholder="Ví dụ: Bàn 02 (Bạn ĐH)…"
+            className="field"
+          />
+        </div>
+
+        <div>
+          <label className="label">Tiền mừng (VND)</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={formData.giftAmount ? formData.giftAmount.toLocaleString('vi-VN') : ''}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, '');
+              setFormData({ ...formData, giftAmount: digits ? parseInt(digits, 10) : undefined });
+            }}
+            placeholder="Ví dụ: 500.000 (ghi sau đám cưới)"
+            className="field"
+          />
+        </div>
+
+        <div>
+          <label className="label">Ghi chú</label>
+          <textarea
+            rows={2}
+            value={formData.note || ''}
+            onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+            placeholder="Ví dụ: Kèm 1 bé, ăn chay, ở xa lên sớm…"
+            className="field py-2.5 resize-none"
+          />
+        </div>
+      </form>
+    </Modal>
   );
 };

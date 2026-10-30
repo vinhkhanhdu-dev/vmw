@@ -1,5 +1,5 @@
 import { MongoClient, Db } from 'mongodb';
-import { Guest, WeddingInfo, ChatMessage } from '../types';
+import { Guest, WeddingInfo, ChatMessage, Expense, PrepItem } from '../types';
 import { initialGuests, initialWeddingInfo, initialChatMessages } from '../data/initialData';
 
 const DEFAULT_MONGODB_URI = 'mongodb://vinhkhanhdu_db_admin:DAWoyokW10kgivA8@ac-5qjysix-shard-00-00.ju09i8v.mongodb.net:27017,ac-5qjysix-shard-00-01.ju09i8v.mongodb.net:27017,ac-5qjysix-shard-00-02.ju09i8v.mongodb.net:27017/?ssl=true&replicaSet=atlas-12j47f-shard-0&authSource=admin';
@@ -15,6 +15,8 @@ let isConnected = false;
 let memoryGuests: Guest[] = [...initialGuests];
 let memoryWeddingInfo: WeddingInfo = { ...initialWeddingInfo };
 let memoryMessages: ChatMessage[] = [...initialChatMessages];
+let memoryExpenses: Expense[] = [];
+let memoryPrepItems: PrepItem[] = [];
 
 export async function initDb(): Promise<boolean> {
   if (!MONGODB_URI) {
@@ -182,6 +184,91 @@ export async function saveChatMessage(message: ChatMessage): Promise<ChatMessage
   }
   memoryMessages.push(message);
   return message;
+}
+
+// ---------- Generic helpers for id-keyed collections ----------
+
+async function readCollection<T extends { id: string }>(name: string, fallback: T[]): Promise<T[]> {
+  if (isConnected && db) {
+    try {
+      const docs = await db.collection(name).find({}).sort({ createdAt: -1 }).toArray();
+      return docs.map((doc) => {
+        const { _id, ...rest } = doc;
+        return { ...rest, id: (rest as any).id || (_id as any).toString() } as unknown as T;
+      });
+    } catch (e) {
+      console.warn(`[MongoDB] Error reading ${name}, returning cache:`, e);
+    }
+  }
+  return fallback;
+}
+
+async function upsertDoc<T extends { id: string }>(name: string, doc: T): Promise<void> {
+  if (isConnected && db) {
+    try {
+      await db.collection(name).updateOne({ _id: doc.id as any }, { $set: doc }, { upsert: true });
+    } catch (e) {
+      console.warn(`[MongoDB] Error saving to ${name}:`, e);
+    }
+  }
+}
+
+async function deleteDoc(name: string, id: string): Promise<void> {
+  if (isConnected && db) {
+    try {
+      await db.collection(name).deleteOne({ _id: id as any });
+    } catch (e) {
+      console.warn(`[MongoDB] Error deleting from ${name}:`, e);
+    }
+  }
+}
+
+function upsertMemory<T extends { id: string }>(list: T[], item: T): T[] {
+  const idx = list.findIndex((x) => x.id === item.id);
+  if (idx < 0) return [item, ...list];
+  const next = [...list];
+  next[idx] = item;
+  return next;
+}
+
+// ---------- Expenses (sổ chi tiêu) ----------
+
+export async function getAllExpenses(): Promise<Expense[]> {
+  return readCollection<Expense>('expenses', memoryExpenses);
+}
+
+export async function saveExpense(expense: Expense): Promise<Expense> {
+  if (!expense?.id) throw new Error('Expense id is required');
+  const updated: Expense = { ...expense, updatedAt: new Date().toISOString() };
+  await upsertDoc('expenses', updated);
+  memoryExpenses = upsertMemory(memoryExpenses, updated);
+  return updated;
+}
+
+export async function deleteExpense(id: string): Promise<boolean> {
+  await deleteDoc('expenses', id);
+  memoryExpenses = memoryExpenses.filter((e) => e.id !== id);
+  return true;
+}
+
+// ---------- Prep checklist (việc cần chuẩn bị) ----------
+
+export async function getAllPrepItems(): Promise<PrepItem[]> {
+  return readCollection<PrepItem>('prep_items', memoryPrepItems);
+}
+
+export async function savePrepItem(item: PrepItem): Promise<PrepItem> {
+  if (!item?.id) throw new Error('Prep item id is required');
+  const updated: PrepItem = { ...item, updatedAt: new Date().toISOString() };
+  await upsertDoc('prep_items', updated);
+  memoryPrepItems = upsertMemory(memoryPrepItems, updated);
+  return updated;
+}
+
+export async function deletePrepItem(id: string): Promise<boolean> {
+  await deleteDoc('prep_items', id);
+  memoryPrepItems = memoryPrepItems.filter((p) => p.id !== id);
+  return true;
 }
 
 export function verifyPin(pin: string): boolean {

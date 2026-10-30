@@ -1,12 +1,19 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import { Guest, DuplicateCandidate, GuestSide, RelationshipCategory } from '../types';
+import { Guest, DuplicateCandidate, ChatActionType, Expense, PrepSuggestion } from '../types';
 import { extractGuestInfoFromText, findDuplicateCandidates, removeVietnameseAccents } from '../utils/vietnameseNlp';
+import { processPlannerMessage, PlannerContext } from '../utils/plannerBot';
 
-interface BotProcessResult {
+export { processPlannerMessage };
+export type { PlannerContext };
+
+export interface BotProcessResult {
   replyText: string;
-  actionType: 'add_guest' | 'duplicate_warning' | 'list_summary' | 'invitation_sample' | 'delete_guest' | 'update_guest' | 'general';
+  actionType: ChatActionType;
   extractedGuest?: Partial<Guest>;
   duplicateCandidates?: DuplicateCandidate[];
+  extractedExpense?: Partial<Expense>;
+  suggestedPrepItems?: PrepSuggestion[];
+  budgetUpdate?: number;
   suggestedQuickReplies?: string[];
   executionTimeMs?: number;
 }
@@ -14,10 +21,17 @@ interface BotProcessResult {
 export async function processUserMessage(
   userMessage: string,
   existingGuests: Guest[],
-  weddingInfo?: any
+  weddingInfo?: any,
+  plannerCtx: PlannerContext = {}
 ): Promise<BotProcessResult> {
   const startTime = Date.now();
   const apiKey = process.env.GEMINI_API_KEY;
+
+  // Câu về chi tiêu / chuẩn bị: xử lý cục bộ, nhanh và chính xác hơn gọi AI
+  const plannerResult = processPlannerMessage(userMessage, existingGuests, weddingInfo, plannerCtx);
+  if (plannerResult) {
+    return { ...plannerResult, executionTimeMs: Date.now() - startTime };
+  }
 
   // Pre-filter most relevant existing guests to minimize prompt token size and maximize Gemini speed
   const userNorm = removeVietnameseAccents(userMessage);
@@ -235,13 +249,20 @@ Nhiệm vụ:
     replyText: `Dạ Mỹ Vinh sẵn sàng! Bạn có thể nhắn tự nhiên như:
 • "Mời anh Nam bạn cấp 3 đi 2 người"
 • "Chị Hương đồng nghiệp Tech 0987654321, nhà gái"
-• "Bác Tuấn họ nội ở quê, 3 suất"`,
+• "Bác Tuấn họ nội ở quê, 3 suất"
+
+Hoặc quản lý chi tiêu và việc chuẩn bị:
+• "Đặt cọc 10tr nhà hàng"
+• "Ngân sách 300tr"
+• "Cần chuẩn bị gì?"`,
     actionType: 'general',
     suggestedQuickReplies: [
       'Mời anh Nam bạn cấp 3 đi 2 người',
       'Chị Hương đồng nghiệp Tech, nhà gái',
       'Kiểm tra trùng lặp',
       'Tổng kết số lượng khách',
+      'Cần chuẩn bị gì?',
+      'Tình hình chi tiêu',
     ],
     executionTimeMs: Date.now() - startTime,
   };
