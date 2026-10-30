@@ -1,0 +1,6 @@
+{
+  "name": "Hỷ Tín - Trợ Lý Mời Cưới Thông Minh",
+  "description": "Trợ lý ảo chatbot quản lý danh sách khách mời đám cưới, tự động bóc tách thông tin, phát hiện trùng lặp và tối ưu trên điện thoại.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
